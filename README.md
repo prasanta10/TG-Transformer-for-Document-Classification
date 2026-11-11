@@ -33,11 +33,11 @@ python run.py --config configs/baseline.yaml
 # Preprocessing only (add --force_preprocess to rebuild the cache)
 python run.py --config configs/baseline.yaml --preprocess_only
 
-# All ablations E1-E5, then the summary tables and plots
-python run_experiments.py
+# Ablations E1-E5, then their summary tables and plots
+python run_experiments.py --only e1 e2 e3 e4 e5
 python summarize_experiments.py
 
-# Edge-aware attention (N1), its summary, and the attention-by-rank check
+# Edge-aware attention (N1), the attention-by-rank check, and its summary
 python run_experiments.py --only N1
 python n1_attention.py
 python summarize_n1.py
@@ -162,12 +162,13 @@ Neither helped (full tables in [`results/experiments/N1/summary.md`](results/exp
 | Ohsumed | 53.79 ± 1.18 | 53.57 ± 1.15 | 53.70 ± 1.20 |
 
 All differences are within 0.25 points. N1a on Ohsumed is lower by 0.22 points with
-p = 0.014, but that is one uncorrected test out of eight and the gap is tiny. The
-learned β values all came out positive but small (0.09 to 0.19), so the model does
-lean toward strongly connected pairs, just not by much. With the bias, the target's
+p = 0.014, but that is one uncorrected test out of eight and the gap is tiny. Every
+learned β came out positive but small: 0.02 to 0.24 across all runs, and 0.09 to 0.19
+when averaged over seeds. So the model does lean toward strongly connected pairs, just
+not by much. With the bias, the target's
 attention to its five closest helpers rose from 0.043 to 0.051 on R8, and from 0.047
-to 0.052 on Ohsumed. Training still stops at about epoch 6, the same as the
-reference. Building B costs about 27 s (R8) and 74 s (Ohsumed) for the intimacy
+to 0.052 on Ohsumed. The best checkpoint still comes at about epoch 6, the same
+as the reference. Building B costs about 27 s (R8) and 74 s (Ohsumed) for the intimacy
 version and under 4 s for the edge version, with about 17 MB of storage each.
 
 ## Code layout
