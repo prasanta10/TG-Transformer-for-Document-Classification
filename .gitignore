@@ -1,0 +1,47 @@
+# --- Data (large / third-party / regenerable) ---------------------------------
+# GloVe 6B 300d (~1 GB) and the TextGCN corpora: download per README.md.
+data/raw/
+# Preprocessing cache (arrays.npz, tfidf.npz, ...): rebuilt by run.py.
+data/processed/
+
+# --- Third-party paper (copyrighted) ------------------------------------------
+paper.pdf
+
+# --- Working files (not part of the polished release) --------------------------
+TASK.md
+prompts/
+tests/
+results/baseline_wl_leak_invalid/
+diagnostics/
+results/diagnostics/
+results/diagnostics.md
+
+# --- Run logs (verbose stdout; key numbers are kept under results/) -----------
+logs/
+
+# --- Model checkpoints ---------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+
+# --- Python ---------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Environments / secrets ----------------------------------------------------
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# --- Editors / OS --------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

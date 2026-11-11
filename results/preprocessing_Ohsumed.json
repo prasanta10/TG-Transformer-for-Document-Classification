@@ -1,0 +1,110 @@
+{
+  "dataset": "Ohsumed",
+  "stats": {
+    "train": 3357,
+    "test": 4043,
+    "vocab": 14157,
+    "classes": 23,
+    "avg_words": 135.82,
+    "empty_docs": 0
+  },
+  "paper_table1": {
+    "train": 3357,
+    "test": 4043,
+    "vocab": 14157,
+    "classes": 23,
+    "avg_words": 135.82
+  },
+  "stats_deviation": {
+    "train": 0,
+    "test": 0,
+    "vocab": 0,
+    "classes": 0,
+    "avg_words": 0.0
+  },
+  "glove": {
+    "type_coverage": 0.8607049516140425,
+    "token_coverage": 0.929329954400324,
+    "oov_types": 1972
+  },
+  "graph": {
+    "n_nodes": 21557,
+    "n_docs": 7400,
+    "n_words": 14157,
+    "doc_word_edges": 588958,
+    "word_word_edges": 3364290,
+    "n_windows": 864473,
+    "nnz_A_with_self_loops": 7928053,
+    "symmetry_max_abs_err": 0.0,
+    "isolated_nodes_excl_self_loop": 0
+  },
+  "wl": {
+    "iterations": 3,
+    "converged": true,
+    "n_colors": 21513,
+    "colors_per_iter": [
+      1,
+      2233,
+      21513,
+      21513
+    ],
+    "max_code": 21512
+  },
+  "S": {
+    "n_rows": 21557,
+    "alpha": 0.15,
+    "row_min": {
+      "min": 1.9170222458342323e-06,
+      "mean": 6.570261120941723e-06,
+      "max": 2.7170715839019977e-05
+    },
+    "row_max": {
+      "min": 0.15020906925201416,
+      "mean": 0.1514563113451004,
+      "max": 0.16623738408088684
+    },
+    "row_sum": {
+      "min": 0.3497622926772692,
+      "mean": 0.8644237773172045,
+      "max": 3.0072563743942737
+    },
+    "row_sum_docs": {
+      "min": 0.3497622926772692,
+      "mean": 0.6804169318146747,
+      "max": 1.2191276258572543
+    },
+    "row_sum_words": {
+      "min": 0.48404612964623084,
+      "mean": 0.9606059244330285,
+      "max": 3.0072563743942737
+    },
+    "diagonal": {
+      "min": 0.15020906925201416,
+      "mean": 0.1514563113451004,
+      "max": 0.16623738408088684
+    },
+    "diag_is_row_max": 21557,
+    "diag_strictly_largest": 21557,
+    "negative_entries_rows": 0,
+    "n_words": 14157
+  },
+  "helpers": {
+    "shape": [
+      7400,
+      50
+    ],
+    "only_word_nodes": true,
+    "no_self": true,
+    "unique_per_row": true,
+    "sorted_by_intimacy_desc": true,
+    "frac_helpers_in_own_doc": 0.955472972972973
+  },
+  "timing_s": {
+    "load_corpus_s": 0.245,
+    "features_s": 2.157,
+    "graph_build_s": 5.421,
+    "wl_s": 0.624,
+    "S_compute_s": 80.025,
+    "helper_selection_s": 2.807
+  }
+}

@@ -1,0 +1,3 @@
+dataset,n_seeds,acc_mean,acc_std,macro_f1_mean,macro_f1_std,paper_acc_mean,paper_acc_std,best_epoch_mean,epochs_run_mean,epoch_time_s_mean,per_seed_acc
+R8,5,95.4865,0.2247,87.1331,1.732,98.1,0.1,6.8,16.8,4.6948,95.71 95.20 95.29 95.57 95.66
+Ohsumed,5,55.1125,1.5833,33.6587,2.7725,70.4,0.4,5.4,15.4,3.1897,55.06 54.84 55.21 57.46 53.01

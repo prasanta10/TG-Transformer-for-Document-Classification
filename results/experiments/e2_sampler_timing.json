@@ -1,0 +1,38 @@
+{
+  "R8": {
+    "intimacy": {
+      "graph_build_s": 1.808,
+      "S_compute_s": 29.318,
+      "helper_selection_s": 1.955,
+      "slice_build_s": 0.0002501129638403654,
+      "total_s": 33.0813
+    },
+    "tfidf": {
+      "tfidf_matrix_s": 0.04850938904564828,
+      "slice_build_s": 0.0379397560027428,
+      "total_s": 0.0864
+    },
+    "random": {
+      "slice_build_s": 0.7004389979992993,
+      "total_s": 0.7004
+    }
+  },
+  "Ohsumed": {
+    "intimacy": {
+      "graph_build_s": 5.421,
+      "S_compute_s": 80.025,
+      "helper_selection_s": 2.807,
+      "slice_build_s": 0.00026503100525587797,
+      "total_s": 88.2533
+    },
+    "tfidf": {
+      "tfidf_matrix_s": 0.10890066297724843,
+      "slice_build_s": 0.04380758502520621,
+      "total_s": 0.1527
+    },
+    "random": {
+      "slice_build_s": 1.2228529779822566,
+      "total_s": 1.2229
+    }
+  }
+}

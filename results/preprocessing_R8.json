@@ -1,0 +1,110 @@
+{
+  "dataset": "R8",
+  "stats": {
+    "train": 5485,
+    "test": 2189,
+    "vocab": 7688,
+    "classes": 8,
+    "avg_words": 65.72,
+    "empty_docs": 0
+  },
+  "paper_table1": {
+    "train": 5485,
+    "test": 2189,
+    "vocab": 7688,
+    "classes": 8,
+    "avg_words": 65.72
+  },
+  "stats_deviation": {
+    "train": 0,
+    "test": 0,
+    "vocab": 0,
+    "classes": 0,
+    "avg_words": 0.0
+  },
+  "glove": {
+    "type_coverage": 0.9629292403746098,
+    "token_coverage": 0.9890134729203224,
+    "oov_types": 285
+  },
+  "graph": {
+    "n_nodes": 15362,
+    "n_docs": 7674,
+    "n_words": 7688,
+    "doc_word_edges": 323670,
+    "word_word_edges": 1395684,
+    "n_windows": 367611,
+    "nnz_A_with_self_loops": 3454070,
+    "symmetry_max_abs_err": 0.0,
+    "isolated_nodes_excl_self_loop": 0
+  },
+  "wl": {
+    "iterations": 3,
+    "converged": true,
+    "n_colors": 15205,
+    "colors_per_iter": [
+      1,
+      1478,
+      15205,
+      15205
+    ],
+    "max_code": 15204
+  },
+  "S": {
+    "n_rows": 15362,
+    "alpha": 0.15,
+    "row_min": {
+      "min": 5.544713985727867e-07,
+      "mean": 3.6680439734482206e-06,
+      "max": 2.362147279200144e-05
+    },
+    "row_max": {
+      "min": 0.1504860371351242,
+      "mean": 0.15234136581420898,
+      "max": 0.17409412562847137
+    },
+    "row_sum": {
+      "min": 0.26819273871592486,
+      "mean": 0.7864024508348031,
+      "max": 5.399708082564757
+    },
+    "row_sum_docs": {
+      "min": 0.26819273871592486,
+      "mean": 0.5619225976137451,
+      "max": 1.4936126534753384
+    },
+    "row_sum_words": {
+      "min": 0.47714766096146377,
+      "mean": 1.010473521804938,
+      "max": 5.399708082564757
+    },
+    "diagonal": {
+      "min": 0.1504860371351242,
+      "mean": 0.15234136581420898,
+      "max": 0.17409412562847137
+    },
+    "diag_is_row_max": 15362,
+    "diag_strictly_largest": 15362,
+    "negative_entries_rows": 0,
+    "n_words": 7688
+  },
+  "helpers": {
+    "shape": [
+      7674,
+      50
+    ],
+    "only_word_nodes": true,
+    "no_self": true,
+    "unique_per_row": true,
+    "sorted_by_intimacy_desc": true,
+    "frac_helpers_in_own_doc": 0.6089497002866823
+  },
+  "timing_s": {
+    "load_corpus_s": 0.13,
+    "features_s": 1.86,
+    "graph_build_s": 1.808,
+    "wl_s": 0.323,
+    "S_compute_s": 29.318,
+    "helper_selection_s": 1.955
+  }
+}

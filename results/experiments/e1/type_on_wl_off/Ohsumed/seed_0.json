@@ -1,0 +1,55 @@
+{
+  "dataset": "Ohsumed",
+  "seed": 0,
+  "test_acc": 0.49245609695770465,
+  "test_macro_f1": 0.26274494059603243,
+  "best_epoch": 4,
+  "epochs_run": 14,
+  "best_val_loss": 1.7972699460529147,
+  "best_val_acc": 0.5148809523809523,
+  "mean_epoch_time_s": 2.527065949423039,
+  "total_train_time_s": 35.40871814696584,
+  "n_train": 3021,
+  "n_val": 336,
+  "n_test": 4043,
+  "n_padded_positions": 0,
+  "n_trainable_params": 6501015,
+  "config": {
+    "model": {
+      "k": 23,
+      "sampler": "intimacy",
+      "use_type_enc": true,
+      "use_wl_enc": false,
+      "readout": "mean",
+      "freeze_embeddings": false,
+      "hidden_size": 32,
+      "num_layers": 2,
+      "num_heads": 4,
+      "intermediate_size": 32,
+      "dropout": 0.5,
+      "attn_dropout": 0.5,
+      "graph_residual": true
+    },
+    "train": {
+      "lr": 0.001,
+      "weight_decay": 0.0005,
+      "embedding_weight_decay": 0.0,
+      "batch_size": 64,
+      "max_epochs": 200,
+      "patience": 10,
+      "val_frac": 0.1,
+      "deterministic": true,
+      "num_threads": 0
+    },
+    "preprocess": {
+      "emb_dim": 300,
+      "oov_seed": 0,
+      "oov_range": 0.1,
+      "window_size": 20,
+      "alpha": 0.15,
+      "top_helpers": 50,
+      "wl_max_iter": 10,
+      "s_block_size": 2048
+    }
+  }
+}

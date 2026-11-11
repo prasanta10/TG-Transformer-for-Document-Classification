@@ -1,0 +1,124 @@
+{
+  "e1/type_off_wl_off": {
+    "flags": [
+      "--use_type_enc",
+      "off",
+      "--use_wl_enc",
+      "off"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 385.4,
+    "log": "logs/experiments/e1_type_off_wl_off.log"
+  },
+  "e1/type_on_wl_off": {
+    "flags": [
+      "--use_wl_enc",
+      "off"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 430.8,
+    "log": "logs/experiments/e1_type_on_wl_off.log"
+  },
+  "e1/type_off_wl_on": {
+    "flags": [
+      "--use_type_enc",
+      "off"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 441.1,
+    "log": "logs/experiments/e1_type_off_wl_on.log"
+  },
+  "e2/sampler_tfidf": {
+    "flags": [
+      "--sampler",
+      "tfidf"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 529.5,
+    "log": "logs/experiments/e2_sampler_tfidf.log"
+  },
+  "e2/sampler_random": {
+    "flags": [
+      "--sampler",
+      "random"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 474.2,
+    "log": "logs/experiments/e2_sampler_random.log"
+  },
+  "e3/k5": {
+    "flags": [
+      "--k",
+      "5"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 316.4,
+    "log": "logs/experiments/e3_k5.log"
+  },
+  "e3/k10": {
+    "flags": [
+      "--k",
+      "10"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 372.6,
+    "log": "logs/experiments/e3_k10.log"
+  },
+  "e3/k15": {
+    "flags": [
+      "--k",
+      "15"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 409.0,
+    "log": "logs/experiments/e3_k15.log"
+  },
+  "e3/k30": {
+    "flags": [
+      "--k",
+      "30"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 627.4,
+    "log": "logs/experiments/e3_k30.log"
+  },
+  "e3/k40": {
+    "flags": [
+      "--k",
+      "40"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 647.3,
+    "log": "logs/experiments/e3_k40.log"
+  },
+  "e4/readout_target": {
+    "flags": [
+      "--readout",
+      "target"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 564.2,
+    "log": "logs/experiments/e4_readout_target.log"
+  },
+  "e5/freeze_on": {
+    "flags": [
+      "--freeze_embeddings",
+      "on"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 244.8,
+    "log": "logs/experiments/e5_freeze_on.log"
+  }
+}
