@@ -21,6 +21,7 @@ import yaml
 
 from attn_bias import get_attn_bias
 from data import canonical_name, prepare_dataset
+from wl_subgraph import get_wl_subgraph
 from train import run_training
 
 PAPER_ACC = {"R8": (98.1, 0.1), "Ohsumed": (70.4, 0.4)}
@@ -52,6 +53,8 @@ def parse_args(argv=None):
     p.add_argument("--freeze_embeddings", type=str2bool, help="E5: on/off")
     p.add_argument("--attn_bias", choices=["none", "intimacy", "edge"],
                    help="N1: graph bias inside attention")
+    p.add_argument("--wl_scope", choices=["full", "subgraph"],
+                   help="W1: WL on the full graph or inside each slice")
     # training overrides
     p.add_argument("--max_epochs", type=int)
     p.add_argument("--patience", type=int)
@@ -71,7 +74,7 @@ def load_config(args) -> dict:
         if getattr(args, key) is not None:
             cfg[key] = getattr(args, key)
     for key in ("k", "sampler", "use_type_enc", "use_wl_enc", "readout", "freeze_embeddings",
-                "attn_bias"):
+                "attn_bias", "wl_scope"):
         if getattr(args, key) is not None:
             cfg["model"][key] = getattr(args, key)
     for key in ("max_epochs", "patience", "num_threads"):
@@ -112,7 +115,7 @@ def write_summary(cfg: dict, all_results: dict, out_dir: str):
         f"Config: k={m['k']}, sampler={m['sampler']}, type_enc={m['use_type_enc']}, "
         f"wl_enc={m['use_wl_enc']}, readout={m['readout']}, "
         f"freeze_embeddings={m['freeze_embeddings']}, "
-        f"attn_bias={m.get('attn_bias', 'none')}; seeds={cfg['seeds']}.", "",
+        f"attn_bias={m.get('attn_bias', 'none')}, wl_scope={m.get('wl_scope', 'full')}; seeds={cfg['seeds']}.", "",
         "Mean ± sample std (ddof=1) over seeds, in %.", "",
         "| Dataset | Test accuracy | Test macro-F1 | Paper accuracy | Best epoch (mean) "
         "| Epochs run (mean) | Time/epoch (s) |",
@@ -155,9 +158,15 @@ def main(argv=None):
             bias = None
             if cfg["model"].get("attn_bias", "none") != "none":
                 bias = get_attn_bias(data, cfg, seed)
-            res, curves = run_training(data, cfg["model"], cfg["train"], seed, attn_bias=bias)
+            wl_sub = None
+            if cfg["model"].get("wl_scope", "full") == "subgraph":
+                wl_sub = get_wl_subgraph(data, cfg, seed)
+            res, curves = run_training(data, cfg["model"], cfg["train"], seed, attn_bias=bias,
+                                       wl_sub=wl_sub)
             if bias is not None:
                 res["attn_bias_build"] = bias["info"]
+            if wl_sub is not None:
+                res["wl_subgraph_build"] = wl_sub["info"]
             res["config"] = {"model": cfg["model"], "train": cfg["train"],
                              "preprocess": cfg["preprocess"]}
             print(f"  -> test acc {100 * res['test_acc']:.2f}  macro-F1 "

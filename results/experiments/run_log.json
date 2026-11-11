@@ -140,5 +140,15 @@
     "complete": true,
     "wall_time_s": 485.8,
     "log": "logs/experiments/N1_attn_edge.log"
+  },
+  "W1/wl_subgraph": {
+    "flags": [
+      "--wl_scope",
+      "subgraph"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 462.7,
+    "log": "logs/experiments/W1_wl_subgraph.log"
   }
 }

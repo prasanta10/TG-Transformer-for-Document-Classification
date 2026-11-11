@@ -131,6 +131,9 @@ class TGTransformer(nn.Module):
             (``intimacy`` / ``edge``); any value other than ``none`` adds a learnable
             ``attn_beta`` of shape (num_layers, num_heads), initialised to 0, and
             ``forward`` then expects a per-slice bias matrix B.
+        wl_scope: W1. ``full`` (baseline): WL codes of the full graph, looked up by
+            node id. ``subgraph``: codes computed inside each slice, passed to
+            ``forward`` per position; ``num_subgraph_codes`` sizes their table.
     """
 
     def __init__(self, features, node_types, wl_codes, num_classes: int,
@@ -139,7 +142,8 @@ class TGTransformer(nn.Module):
                  attn_dropout: float = 0.5, use_type_enc: bool = True,
                  use_wl_enc: bool = True, readout: str = "mean",
                  freeze_embeddings: bool = False, graph_residual: bool = True,
-                 attn_bias: str = "none"):
+                 attn_bias: str = "none", wl_scope: str = "full",
+                 num_subgraph_codes: int = 0):
         """Build embeddings, encodings, encoder stack, G-Res projection and classifier."""
         super().__init__()
         if readout not in ("mean", "target"):
@@ -158,9 +162,20 @@ class TGTransformer(nn.Module):
         if use_type_enc:
             self.type_emb = nn.Embedding(2, d)
             nn.init.normal_(self.type_emb.weight, std=0.02)
-        if use_wl_enc:
+        if wl_scope not in ("full", "subgraph"):
+            raise ValueError(f"Unknown wl_scope '{wl_scope}'")
+        self.wl_scope = wl_scope
+        if use_wl_enc and wl_scope == "full":
             wl = wl_sinusoidal_encoding(wl_codes, d)
             self.register_buffer("wl_table", torch.cat([wl, torch.zeros(1, d)]), persistent=False)
+        elif use_wl_enc:
+            # W1: same Eq. 5 sinusoid, for the slice-level codes 0..n-1; the extra last
+            # row (index n) is the zero vector used for padded positions.
+            if num_subgraph_codes < 1:
+                raise ValueError("wl_scope='subgraph' needs num_subgraph_codes >= 1")
+            wl = wl_sinusoidal_encoding(np.arange(num_subgraph_codes), d)
+            self.register_buffer("wl_sub_table", torch.cat([wl, torch.zeros(1, d)]),
+                                 persistent=False)
         self.in_proj = nn.Linear(d, hidden_size)
         self.in_norm = nn.LayerNorm(hidden_size, eps=1e-12)
         self.drop = nn.Dropout(dropout)
@@ -181,13 +196,16 @@ class TGTransformer(nn.Module):
             self.attn_beta = nn.Parameter(torch.zeros(num_layers, num_heads))
 
     def forward(self, node_ids: torch.Tensor, mask: torch.Tensor,
-                bias: torch.Tensor | None = None) -> torch.Tensor:
+                bias: torch.Tensor | None = None,
+                wl_ids: torch.Tensor | None = None) -> torch.Tensor:
         """Compute class logits.
 
         Args:
             node_ids: (B, k+1) global node ids; column 0 = target document.
             mask: (B, k+1) bool, True for real nodes.
             bias: (B, k+1, k+1) graph-score matrix B (N1); required iff attn_bias != none.
+            wl_ids: (B, k+1) slice-level WL codes (W1), padding = num_subgraph_codes;
+                required iff wl_scope == subgraph and the WL encoding is on.
 
         Returns:
             (B, num_classes) logits (softmax of paper Eq. 8 is folded into the loss).
@@ -196,8 +214,13 @@ class TGTransformer(nn.Module):
         h0 = x
         if self.use_type_enc:
             h0 = h0 + self.type_emb(self.node_types[node_ids])
-        if self.use_wl_enc:
+        needs_wl_ids = self.use_wl_enc and self.wl_scope == "subgraph"
+        if needs_wl_ids != (wl_ids is not None):
+            raise ValueError("wl_ids must be given exactly when wl_scope == 'subgraph'")
+        if self.use_wl_enc and self.wl_scope == "full":
             h0 = h0 + self.wl_table[node_ids]               # paper Eq. 5
+        elif self.use_wl_enc:
+            h0 = h0 + self.wl_sub_table[wl_ids]             # paper Eq. 5, slice-level codes
         h = self.drop(self.in_norm(self.in_proj(h0)))       # H(0) projected to hidden size
         res = self.res_proj(x) if self.graph_residual else None
         if self.use_attn_bias != (bias is not None):

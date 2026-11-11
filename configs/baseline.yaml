@@ -31,6 +31,7 @@ model:
   readout: mean               # E4: mean | target
   freeze_embeddings: false    # E5
   attn_bias: none             # N1: none | intimacy | edge (graph bias inside attention)
+  wl_scope: full              # W1: full | subgraph (WL on the full graph or inside each slice)
   # --- architecture ---
   hidden_size: 32
   num_layers: 2

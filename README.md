@@ -41,6 +41,10 @@ python summarize_experiments.py
 python run_experiments.py --only N1
 python n1_attention.py
 python summarize_n1.py
+
+# WL computed inside each slice (W1) and its summary
+python run_experiments.py --only W1
+python summarize_w1.py
 ```
 
 Preprocessing runs once per dataset and is cached in `data/processed/`. It takes
@@ -61,6 +65,7 @@ Each switch can be set in the config file or on the command line. Use
 | E4: readout | `--readout` | `mean` / `target` |
 | E5: freeze the input embeddings | `--freeze_embeddings` | `on` / `off` |
 | N1: graph bias inside attention | `--attn_bias` | `none` / `intimacy` / `edge` |
+| W1: where WL codes are computed | `--wl_scope` | `full` / `subgraph` |
 
 ```bash
 python run.py --config configs/baseline.yaml --experiment e2_tfidf --sampler tfidf
@@ -171,21 +176,49 @@ to 0.052 on Ohsumed. The best checkpoint still comes at about epoch 6, the same
 as the reference. Building B costs about 27 s (R8) and 74 s (Ohsumed) for the intimacy
 version and under 4 s for the edge version, with about 17 MB of storage each.
 
+### WL inside each slice (W1)
+
+The paper describes WL codes for the nodes "in the sampled subgraph", while we follow
+Graph-BERT and compute WL once on the whole graph. W1 tries the literal reading: WL
+runs inside each document's 24-node slice, using only the edges among those nodes,
+with one code dictionary shared by all slices. The idea was that small subgraphs
+would give shared, role-like codes instead of near-unique ones.
+
+They don't. The slices are dense, with about 185 edges among 24 nodes, so after two
+rounds almost every node's neighbourhood looks different. With full-graph WL, 4–5% of
+(slice, position) entries have a code no other entry shares, because a word keeps the
+same code everywhere it appears. With subgraph WL that rises to 76% on R8 and 84% on
+Ohsumed.
+
+Results (full tables in [`results/experiments/W1/summary.md`](results/experiments/W1/summary.md)):
+
+| Dataset | Full-graph WL (baseline) | Subgraph WL (W1) | No WL (E1) |
+|---|---|---|---|
+| R8 | 95.08 ± 0.29 | 94.87 ± 0.32 | 94.98 ± 0.41 |
+| Ohsumed | 53.79 ± 1.18 | 51.49 ± 1.71 | 50.13 ± 2.43 |
+
+On R8 none of the differences is significant. On Ohsumed, subgraph WL is worse than
+full-graph WL (−2.3 points, p = 0.010) but better than no WL at all (+1.4 points,
+p = 0.036; macro-F1 +3.4, p = 0.002). Computing the codes takes about 8 s on R8 and
+11 s on Ohsumed.
+
 ## Code layout
 
 ```
 data.py                  corpus loading, GloVe features, preprocessing and cache
 graph.py                 TF-IDF/PMI graph, intimacy scores, helper selection
-wl.py                    Weisfeiler-Lehman codes
+wl.py                    Weisfeiler-Lehman codes (full graph, and batched per slice)
 sampling.py              intimacy / tfidf / random samplers
 model.py                 the TG-Transformer
 train.py                 training loop, early stopping, evaluation
 run.py                   command-line entry point
-run_experiments.py       runs ablations E1-E5 and N1
+run_experiments.py       runs ablations E1-E5, N1 and W1
 attn_bias.py             builds the N1 attention-bias matrices B
 summarize_experiments.py summary tables, significance tests, plots
 time_samplers.py         preprocessing cost of each sampler (E2)
 summarize_n1.py          N1 summary: tables, significance tests, learned beta, cost
 n1_attention.py          N1 check: attention to helpers by intimacy rank
+wl_subgraph.py           W1: WL codes computed inside each slice
+summarize_w1.py          W1 summary: tables, significance tests, WL statistics
 configs/baseline.yaml    baseline settings
 ```

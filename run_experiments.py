@@ -1,4 +1,4 @@
-"""Run experiments E1-E5 and N1.
+"""Run experiments E1-E5, N1 and W1.
 
 Each setting changes exactly one thing relative to the reference configuration
 (configs/baseline.yaml) and is run on R8 and Ohsumed with seeds 0-4 via run.py,
@@ -48,6 +48,11 @@ N1_SETTINGS = [
     ("N1", "attn_edge", ["--attn_bias", "edge"]),
 ]
 
+# Experiment W1 (WL computed inside each slice). Results: results/experiments/W1/<setting>/.
+W1_SETTINGS = [
+    ("W1", "wl_subgraph", ["--wl_scope", "subgraph"]),
+]
+
 
 def setting_dir(exp: str, setting: str) -> str:
     """Results directory of one setting, relative to results/."""
@@ -65,14 +70,14 @@ def main():
     """Run all (or selected) settings sequentially and write a run log."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default="configs/baseline.yaml")
-    ap.add_argument("--only", nargs="+", help="restrict to these experiments, e.g. e1 e3 N1")
+    ap.add_argument("--only", nargs="+", help="restrict to these experiments, e.g. e1 e3 N1 W1")
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs", "experiments"), exist_ok=True)
     log_path = os.path.join(ROOT, "results", "experiments", "run_log.json")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     run_log = json.load(open(log_path)) if os.path.exists(log_path) else {}
 
-    for exp, setting, flags in SETTINGS + N1_SETTINGS:
+    for exp, setting, flags in SETTINGS + N1_SETTINGS + W1_SETTINGS:
         if args.only and exp not in args.only:
             continue
         key = f"{exp}/{setting}"

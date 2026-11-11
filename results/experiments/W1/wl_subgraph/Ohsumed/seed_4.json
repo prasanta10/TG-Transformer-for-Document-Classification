@@ -1,0 +1,186 @@
+{
+  "dataset": "Ohsumed",
+  "seed": 4,
+  "test_acc": 0.4887459807073955,
+  "test_macro_f1": 0.2767177992344961,
+  "best_epoch": 5,
+  "epochs_run": 15,
+  "best_val_loss": 1.641528810773577,
+  "best_val_acc": 0.5267857142857143,
+  "mean_epoch_time_s": 2.733249925467438,
+  "total_train_time_s": 41.04147894000198,
+  "n_train": 3021,
+  "n_val": 336,
+  "n_test": 4043,
+  "n_padded_positions": 0,
+  "n_trainable_params": 6501015,
+  "wl_subgraph_build": {
+    "sampler": "intimacy",
+    "k": 23,
+    "shape": [
+      7400,
+      24
+    ],
+    "graph_rebuild_s": 3.9894357019948075,
+    "subgraph_extract_s": 0.7842982430011034,
+    "wl_s": 5.861375544998737,
+    "total_build_s": 10.660229711000284,
+    "wl": {
+      "rounds": 6,
+      "converged": true,
+      "codes_per_round": [
+        1,
+        23,
+        159019,
+        161522,
+        161552,
+        161553,
+        161553
+      ],
+      "n_codes": 161553
+    },
+    "edges_per_slice": {
+      "min": 88,
+      "mean": 183.5658108108108,
+      "max": 257
+    },
+    "stats_subgraph": {
+      "n_entries": 177600,
+      "n_distinct_codes": 161553,
+      "min_code": 0,
+      "max_code": 161552,
+      "frac_entries_with_unique_code": 0.8432939189189189,
+      "most_common": [
+        [
+          161489,
+          14
+        ],
+        [
+          161551,
+          11
+        ],
+        [
+          161540,
+          11
+        ],
+        [
+          161530,
+          10
+        ],
+        [
+          161544,
+          10
+        ],
+        [
+          161053,
+          10
+        ],
+        [
+          161541,
+          9
+        ],
+        [
+          161536,
+          9
+        ],
+        [
+          87770,
+          9
+        ],
+        [
+          160332,
+          8
+        ]
+      ]
+    },
+    "stats_full": {
+      "n_entries": 177600,
+      "n_distinct_codes": 21511,
+      "min_code": 0,
+      "max_code": 21512,
+      "frac_entries_with_unique_code": 0.045777027027027024,
+      "most_common": [
+        [
+          21368,
+          158
+        ],
+        [
+          21185,
+          141
+        ],
+        [
+          21348,
+          139
+        ],
+        [
+          21322,
+          126
+        ],
+        [
+          21079,
+          120
+        ],
+        [
+          21334,
+          120
+        ],
+        [
+          21105,
+          114
+        ],
+        [
+          21048,
+          112
+        ],
+        [
+          21008,
+          112
+        ],
+        [
+          20869,
+          111
+        ]
+      ]
+    }
+  },
+  "config": {
+    "model": {
+      "k": 23,
+      "sampler": "intimacy",
+      "use_type_enc": true,
+      "use_wl_enc": true,
+      "readout": "mean",
+      "freeze_embeddings": false,
+      "attn_bias": "none",
+      "wl_scope": "subgraph",
+      "hidden_size": 32,
+      "num_layers": 2,
+      "num_heads": 4,
+      "intermediate_size": 32,
+      "dropout": 0.5,
+      "attn_dropout": 0.5,
+      "graph_residual": true
+    },
+    "train": {
+      "lr": 0.001,
+      "weight_decay": 0.0005,
+      "embedding_weight_decay": 0.0,
+      "batch_size": 64,
+      "max_epochs": 200,
+      "patience": 10,
+      "val_frac": 0.1,
+      "deterministic": true,
+      "num_threads": 0
+    },
+    "preprocess": {
+      "emb_dim": 300,
+      "oov_seed": 0,
+      "oov_range": 0.1,
+      "window_size": 20,
+      "alpha": 0.15,
+      "top_helpers": 50,
+      "wl_max_iter": 10,
+      "s_block_size": 2048
+    }
+  }
+}

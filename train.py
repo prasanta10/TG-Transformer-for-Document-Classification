@@ -72,13 +72,14 @@ def build_optimizer(model: TGTransformer, lr: float, weight_decay: float,
 
 
 @torch.no_grad()
-def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None):
+def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None, wl_ids=None):
     """Mean cross-entropy loss, accuracy, macro-F1 and predictions on documents ``idx``."""
     model.eval()
     losses, preds = [], []
     for s in range(0, len(idx), batch_size):
         b = idx[s:s + batch_size]
-        logits = model(node_ids[b], mask[b], None if bias is None else bias[b])
+        logits = model(node_ids[b], mask[b], None if bias is None else bias[b],
+                       None if wl_ids is None else wl_ids[b])
         losses.append(F.cross_entropy(logits, labels[b], reduction="sum").item())
         preds.append(logits.argmax(1))
     preds = torch.cat(preds).numpy()
@@ -88,7 +89,7 @@ def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None):
 
 
 def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
-                 attn_bias=None, return_model: bool = False):
+                 attn_bias=None, return_model: bool = False, wl_sub=None):
     """Train one model on one dataset with one seed and evaluate on the test set.
 
     Args:
@@ -100,6 +101,8 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         attn_bias: for N1, a dict from ``attn_bias.get_attn_bias`` with ``B``
             (n_docs, k+1, k+1) and the ``node_ids`` it was built for; None otherwise.
         return_model: also return the model with the best checkpoint loaded.
+        wl_sub: for W1, a dict from ``wl_subgraph.get_wl_subgraph`` with ``codes``
+            (n_docs, k+1; -1 = padding) and the ``node_ids`` they were built for.
 
     Returns:
         result: dict with test accuracy / macro-F1, best epoch, timings.
@@ -127,6 +130,17 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         if not np.array_equal(attn_bias["node_ids"], ids_np):
             raise ValueError("attention bias B was built for different slices")
         bias = torch.as_tensor(attn_bias["B"])
+    wl_scope = mcfg.get("wl_scope", "full")
+    if (wl_scope == "subgraph") != (wl_sub is not None):
+        raise ValueError("wl_sub must be given exactly when mcfg['wl_scope'] == 'subgraph'")
+    wl_ids, n_sub_codes = None, 0
+    if wl_sub is not None:
+        if not np.array_equal(wl_sub["node_ids"], ids_np):
+            raise ValueError("subgraph WL codes were built for different slices")
+        codes = np.asarray(wl_sub["codes"])
+        n_sub_codes = int(codes.max()) + 1
+        if mcfg["use_wl_enc"]:
+            wl_ids = torch.as_tensor(np.where(codes < 0, n_sub_codes, codes))
 
     model = TGTransformer(
         data.X, data.node_types, data.wl_codes, data.num_classes,
@@ -135,7 +149,8 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         dropout=mcfg["dropout"], attn_dropout=mcfg["attn_dropout"],
         use_type_enc=mcfg["use_type_enc"], use_wl_enc=mcfg["use_wl_enc"],
         readout=mcfg["readout"], freeze_embeddings=mcfg["freeze_embeddings"],
-        graph_residual=mcfg["graph_residual"], attn_bias=bias_mode)
+        graph_residual=mcfg["graph_residual"], attn_bias=bias_mode,
+        wl_scope=wl_scope, num_subgraph_codes=n_sub_codes)
     opt = build_optimizer(model, tcfg["lr"], tcfg["weight_decay"],
                           tcfg["embedding_weight_decay"])
     gen = torch.Generator().manual_seed(seed)
@@ -153,14 +168,15 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         tot, n = 0.0, 0
         for s in range(0, len(perm), bs):
             b = perm[s:s + bs]
-            logits = model(node_ids[b], mask[b], None if bias is None else bias[b])
+            logits = model(node_ids[b], mask[b], None if bias is None else bias[b],
+                           None if wl_ids is None else wl_ids[b])
             loss = F.cross_entropy(logits, y_visible[b])        # paper Eq. 9
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             tot += loss.item() * len(b)
             n += len(b)
-        val = evaluate(model, node_ids, mask, y_visible, va_idx, bs, bias)
+        val = evaluate(model, node_ids, mask, y_visible, va_idx, bs, bias, wl_ids)
         dt = time.perf_counter() - t0
         epoch_times.append(dt)
         curves.append({"epoch": epoch, "train_loss": tot / n, "val_loss": val["loss"],
@@ -181,7 +197,7 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
 
     # ---- final test evaluation with the best-validation checkpoint ----------
     model.load_state_dict(best["state"])
-    test = evaluate(model, node_ids, mask, torch.as_tensor(data.labels), test_idx, bs, bias)
+    test = evaluate(model, node_ids, mask, torch.as_tensor(data.labels), test_idx, bs, bias, wl_ids)
     result = {
         "dataset": data.name, "seed": seed,
         "test_acc": test["acc"], "test_macro_f1": test["macro_f1"],
