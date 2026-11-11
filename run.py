@@ -19,6 +19,7 @@ import numpy as np
 import torch
 import yaml
 
+from attn_bias import get_attn_bias
 from data import canonical_name, prepare_dataset
 from train import run_training
 
@@ -49,6 +50,8 @@ def parse_args(argv=None):
     p.add_argument("--use_wl_enc", type=str2bool, help="E1: on/off")
     p.add_argument("--readout", choices=["mean", "target"], help="E4")
     p.add_argument("--freeze_embeddings", type=str2bool, help="E5: on/off")
+    p.add_argument("--attn_bias", choices=["none", "intimacy", "edge"],
+                   help="N1: graph bias inside attention")
     # training overrides
     p.add_argument("--max_epochs", type=int)
     p.add_argument("--patience", type=int)
@@ -67,7 +70,8 @@ def load_config(args) -> dict:
     for key in ("experiment", "datasets", "seeds"):
         if getattr(args, key) is not None:
             cfg[key] = getattr(args, key)
-    for key in ("k", "sampler", "use_type_enc", "use_wl_enc", "readout", "freeze_embeddings"):
+    for key in ("k", "sampler", "use_type_enc", "use_wl_enc", "readout", "freeze_embeddings",
+                "attn_bias"):
         if getattr(args, key) is not None:
             cfg["model"][key] = getattr(args, key)
     for key in ("max_epochs", "patience", "num_threads"):
@@ -107,7 +111,8 @@ def write_summary(cfg: dict, all_results: dict, out_dir: str):
         f"# TG-Transformer — {cfg['experiment']}", "",
         f"Config: k={m['k']}, sampler={m['sampler']}, type_enc={m['use_type_enc']}, "
         f"wl_enc={m['use_wl_enc']}, readout={m['readout']}, "
-        f"freeze_embeddings={m['freeze_embeddings']}; seeds={cfg['seeds']}.", "",
+        f"freeze_embeddings={m['freeze_embeddings']}, "
+        f"attn_bias={m.get('attn_bias', 'none')}; seeds={cfg['seeds']}.", "",
         "Mean ± sample std (ddof=1) over seeds, in %.", "",
         "| Dataset | Test accuracy | Test macro-F1 | Paper accuracy | Best epoch (mean) "
         "| Epochs run (mean) | Time/epoch (s) |",
@@ -147,7 +152,12 @@ def main(argv=None):
         all_results[ds] = []
         for seed in cfg["seeds"]:
             print(f"\n=== {cfg['experiment']} | {ds} | seed {seed} ===", flush=True)
-            res, curves = run_training(data, cfg["model"], cfg["train"], seed)
+            bias = None
+            if cfg["model"].get("attn_bias", "none") != "none":
+                bias = get_attn_bias(data, cfg, seed)
+            res, curves = run_training(data, cfg["model"], cfg["train"], seed, attn_bias=bias)
+            if bias is not None:
+                res["attn_bias_build"] = bias["info"]
             res["config"] = {"model": cfg["model"], "train": cfg["train"],
                              "preprocess": cfg["preprocess"]}
             print(f"  -> test acc {100 * res['test_acc']:.2f}  macro-F1 "

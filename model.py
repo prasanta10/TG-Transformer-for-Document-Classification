@@ -57,9 +57,19 @@ class MultiHeadSelfAttention(nn.Module):
         self.v = nn.Linear(hidden, hidden)
         self.out = nn.Linear(hidden, hidden)
         self.drop = nn.Dropout(attn_dropout)
+        self.keep_attn = False      # if True, store the attention probabilities (analysis only)
+        self.last_attn = None
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """Apply attention. x: (B, L, H); mask: (B, L) bool, True = real token."""
+    def forward(self, x: torch.Tensor, mask: torch.Tensor,
+                bias: torch.Tensor | None = None) -> torch.Tensor:
+        """Apply attention.
+
+        Args:
+            x: (B, L, H) hidden states.
+            mask: (B, L) bool, True = real token.
+            bias: optional (B, heads, L, L) additive attention bias (N1), added to the
+                scaled scores before the mask and the softmax.
+        """
         B, L, H = x.shape
 
         def split(t):
@@ -67,8 +77,13 @@ class MultiHeadSelfAttention(nn.Module):
 
         q, k, v = split(self.q(x)), split(self.k(x)), split(self.v(x))
         scores = q @ k.transpose(-1, -2) / math.sqrt(self.dh)
+        if bias is not None:
+            scores = scores + bias
         scores = scores.masked_fill(~mask[:, None, None, :], torch.finfo(scores.dtype).min)
-        p = self.drop(torch.softmax(scores, dim=-1))
+        p = torch.softmax(scores, dim=-1)
+        if self.keep_attn:
+            self.last_attn = p.detach()
+        p = self.drop(p)
         ctx = (p @ v).transpose(1, 2).reshape(B, L, H)
         return self.out(ctx)
 
@@ -87,9 +102,10 @@ class EncoderLayer(nn.Module):
         self.ln2 = nn.LayerNorm(hidden, eps=1e-12)
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """x: (B, L, H), mask: (B, L) bool."""
-        x = self.ln1(x + self.drop(self.attn(x, mask)))
+    def forward(self, x: torch.Tensor, mask: torch.Tensor,
+                bias: torch.Tensor | None = None) -> torch.Tensor:
+        """x: (B, L, H), mask: (B, L) bool, bias: optional (B, heads, L, L)."""
+        x = self.ln1(x + self.drop(self.attn(x, mask, bias)))
         x = self.ln2(x + self.drop(self.ff2(F.gelu(self.ff1(x)))))
         return x
 
@@ -111,6 +127,10 @@ class TGTransformer(nn.Module):
             (position 0) (E4).
         freeze_embeddings: keep X fixed (E5).
         graph_residual: add the G-Res term at every layer (paper Eq. 7).
+        attn_bias: N1 edge-aware attention. ``none`` (baseline) or a bias type
+            (``intimacy`` / ``edge``); any value other than ``none`` adds a learnable
+            ``attn_beta`` of shape (num_layers, num_heads), initialised to 0, and
+            ``forward`` then expects a per-slice bias matrix B.
     """
 
     def __init__(self, features, node_types, wl_codes, num_classes: int,
@@ -118,7 +138,8 @@ class TGTransformer(nn.Module):
                  intermediate_size: int = 32, dropout: float = 0.5,
                  attn_dropout: float = 0.5, use_type_enc: bool = True,
                  use_wl_enc: bool = True, readout: str = "mean",
-                 freeze_embeddings: bool = False, graph_residual: bool = True):
+                 freeze_embeddings: bool = False, graph_residual: bool = True,
+                 attn_bias: str = "none"):
         """Build embeddings, encodings, encoder stack, G-Res projection and classifier."""
         super().__init__()
         if readout not in ("mean", "target"):
@@ -151,13 +172,22 @@ class TGTransformer(nn.Module):
             # shared across layers as in Graph-BERT's "raw" graph residual.
             self.res_proj = nn.Linear(d, hidden_size)
         self.classifier = nn.Linear(hidden_size, num_classes)
+        if attn_bias not in ("none", "intimacy", "edge"):
+            raise ValueError(f"Unknown attn_bias '{attn_bias}'")
+        self.use_attn_bias = attn_bias != "none"
+        if self.use_attn_bias:
+            # beta[l, h] scales B in head h of layer l; 0 at init = exactly the baseline.
+            # Created last and with zeros, so it consumes no random numbers.
+            self.attn_beta = nn.Parameter(torch.zeros(num_layers, num_heads))
 
-    def forward(self, node_ids: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, node_ids: torch.Tensor, mask: torch.Tensor,
+                bias: torch.Tensor | None = None) -> torch.Tensor:
         """Compute class logits.
 
         Args:
             node_ids: (B, k+1) global node ids; column 0 = target document.
             mask: (B, k+1) bool, True for real nodes.
+            bias: (B, k+1, k+1) graph-score matrix B (N1); required iff attn_bias != none.
 
         Returns:
             (B, num_classes) logits (softmax of paper Eq. 8 is folded into the loss).
@@ -170,8 +200,13 @@ class TGTransformer(nn.Module):
             h0 = h0 + self.wl_table[node_ids]               # paper Eq. 5
         h = self.drop(self.in_norm(self.in_proj(h0)))       # H(0) projected to hidden size
         res = self.res_proj(x) if self.graph_residual else None
-        for layer in self.layers:
-            h = layer(h, mask)                              # paper Eqs. 6-7
+        if self.use_attn_bias != (bias is not None):
+            raise ValueError("bias must be given exactly when attn_bias != 'none'")
+        for li, layer in enumerate(self.layers):
+            lb = None
+            if bias is not None:                            # N1: beta[l, h] * B
+                lb = self.attn_beta[li][None, :, None, None] * bias[:, None].to(h.dtype)
+            h = layer(h, mask, lb)                          # paper Eqs. 6-7
             if res is not None:
                 h = h + res                                 # G-Res term of Eq. 7
         if self.readout == "mean":                          # paper Eq. 8: average(H(D))

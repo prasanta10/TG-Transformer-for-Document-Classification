@@ -120,5 +120,25 @@
     "complete": true,
     "wall_time_s": 244.8,
     "log": "logs/experiments/e5_freeze_on.log"
+  },
+  "N1/attn_intimacy": {
+    "flags": [
+      "--attn_bias",
+      "intimacy"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 480.9,
+    "log": "logs/experiments/N1_attn_intimacy.log"
+  },
+  "N1/attn_edge": {
+    "flags": [
+      "--attn_bias",
+      "edge"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 485.8,
+    "log": "logs/experiments/N1_attn_edge.log"
   }
 }

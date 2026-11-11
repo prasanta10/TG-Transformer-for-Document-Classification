@@ -1,0 +1,88 @@
+{
+  "dataset": "Ohsumed",
+  "seed": 1,
+  "test_acc": 0.527083848627257,
+  "test_macro_f1": 0.35731995593920535,
+  "best_epoch": 6,
+  "epochs_run": 16,
+  "best_val_loss": 1.4433811392102922,
+  "best_val_acc": 0.5803571428571429,
+  "mean_epoch_time_s": 2.6418476321869093,
+  "total_train_time_s": 42.32203694299824,
+  "n_train": 3021,
+  "n_val": 336,
+  "n_test": 4043,
+  "n_padded_positions": 0,
+  "n_trainable_params": 6501023,
+  "attn_beta": [
+    [
+      0.08939403295516968,
+      0.12268853187561035,
+      0.0838853120803833,
+      0.07492144405841827
+    ],
+    [
+      0.2023133784532547,
+      0.20711496472358704,
+      0.19455768167972565,
+      0.22735537588596344
+    ]
+  ],
+  "attn_bias_build": {
+    "version": "intimacy",
+    "sampler": "intimacy",
+    "k": 23,
+    "shape": [
+      7400,
+      24,
+      24
+    ],
+    "dtype": "float32",
+    "storage_mb": 16.259765625,
+    "graph_rebuild_s": 3.0856741549941944,
+    "raw_scores_s": 70.4876496240031,
+    "normalize_s": 0.08800151399918832,
+    "total_build_s": 73.66233401899808,
+    "n_constant_slices": 0,
+    "max_abs_diff_vs_cached_helper_scores": 9.313225746154785e-09
+  },
+  "config": {
+    "model": {
+      "k": 23,
+      "sampler": "intimacy",
+      "use_type_enc": true,
+      "use_wl_enc": true,
+      "readout": "mean",
+      "freeze_embeddings": false,
+      "attn_bias": "intimacy",
+      "hidden_size": 32,
+      "num_layers": 2,
+      "num_heads": 4,
+      "intermediate_size": 32,
+      "dropout": 0.5,
+      "attn_dropout": 0.5,
+      "graph_residual": true
+    },
+    "train": {
+      "lr": 0.001,
+      "weight_decay": 0.0005,
+      "embedding_weight_decay": 0.0,
+      "batch_size": 64,
+      "max_epochs": 200,
+      "patience": 10,
+      "val_frac": 0.1,
+      "deterministic": true,
+      "num_threads": 0
+    },
+    "preprocess": {
+      "emb_dim": 300,
+      "oov_seed": 0,
+      "oov_range": 0.1,
+      "window_size": 20,
+      "alpha": 0.15,
+      "top_helpers": 50,
+      "wl_max_iter": 10,
+      "s_block_size": 2048
+    }
+  }
+}

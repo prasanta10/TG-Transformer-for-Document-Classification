@@ -36,6 +36,11 @@ python run.py --config configs/baseline.yaml --preprocess_only
 # All ablations E1-E5, then the summary tables and plots
 python run_experiments.py
 python summarize_experiments.py
+
+# Edge-aware attention (N1), its summary, and the attention-by-rank check
+python run_experiments.py --only N1
+python n1_attention.py
+python summarize_n1.py
 ```
 
 Preprocessing runs once per dataset and is cached in `data/processed/`. It takes
@@ -55,6 +60,7 @@ Each switch can be set in the config file or on the command line. Use
 | E3: number of helper words | `--k` | 1 to 50 |
 | E4: readout | `--readout` | `mean` / `target` |
 | E5: freeze the input embeddings | `--freeze_embeddings` | `on` / `off` |
+| N1: graph bias inside attention | `--attn_bias` | `none` / `intimacy` / `edge` |
 
 ```bash
 python run.py --config configs/baseline.yaml --experiment e2_tfidf --sampler tfidf
@@ -95,6 +101,8 @@ validation loss. Seeds are fixed and runs are deterministic.
 - **Weight decay** (5e-4) is applied to everything except the embedding table.
   Otherwise it would slowly shrink the embeddings of test documents, which never
   receive a gradient.
+- **β in N1 gets no weight decay**, so it isn't pulled back toward 0 (the baseline)
+  just by the regulariser.
 - **Only documents are classified.** Word nodes have no labels, so the paper's
   word-target part isn't implemented.
 
@@ -133,6 +141,35 @@ What the ablations showed (full tables in [`results/experiments/summary.md`](res
   5.6 points. On R8, accuracy barely changed, though macro-F1 dropped 2.7 points.
 - **Reading out only the document's own position (E4)** hurt Ohsumed by 8.3 points.
 
+### Edge-aware attention (N1)
+
+In the original model, graph scores only decide which words enter a document's slice.
+Attention itself never sees how strongly those nodes are connected. N1 adds that, in
+the style of Graphormer: each head's attention scores get an extra term β·B before the
+softmax. B is a 24 × 24 table of graph scores for the slice, z-scored within the
+slice, and β is one learned number per layer and head, starting at 0. We tried two
+kinds of B:
+
+- **N1a, `intimacy`:** the log intimacy score between every pair of nodes in the slice.
+- **N1b, `edge`:** the log graph-edge weight, TF-IDF between the document and a word
+  and PMI between two words, with 0 where there is no edge.
+
+Neither helped (full tables in [`results/experiments/N1/summary.md`](results/experiments/N1/summary.md)):
+
+| Dataset | Reference | N1a: intimacy | N1b: edge |
+|---|---|---|---|
+| R8 | 95.08 ± 0.29 | 95.05 ± 0.33 | 95.07 ± 0.34 |
+| Ohsumed | 53.79 ± 1.18 | 53.57 ± 1.15 | 53.70 ± 1.20 |
+
+All differences are within 0.25 points. N1a on Ohsumed is lower by 0.22 points with
+p = 0.014, but that is one uncorrected test out of eight and the gap is tiny. The
+learned β values all came out positive but small (0.09 to 0.19), so the model does
+lean toward strongly connected pairs, just not by much. With the bias, the target's
+attention to its five closest helpers rose from 0.043 to 0.051 on R8, and from 0.047
+to 0.052 on Ohsumed. Training still stops at about epoch 6, the same as the
+reference. Building B costs about 27 s (R8) and 74 s (Ohsumed) for the intimacy
+version and under 4 s for the edge version, with about 17 MB of storage each.
+
 ## Code layout
 
 ```
@@ -143,8 +180,11 @@ sampling.py              intimacy / tfidf / random samplers
 model.py                 the TG-Transformer
 train.py                 training loop, early stopping, evaluation
 run.py                   command-line entry point
-run_experiments.py       runs ablations E1-E5
+run_experiments.py       runs ablations E1-E5 and N1
+attn_bias.py             builds the N1 attention-bias matrices B
 summarize_experiments.py summary tables, significance tests, plots
 time_samplers.py         preprocessing cost of each sampler (E2)
+summarize_n1.py          N1 summary: tables, significance tests, learned beta, cost
+n1_attention.py          N1 check: attention to helpers by intimacy rank
 configs/baseline.yaml    baseline settings
 ```

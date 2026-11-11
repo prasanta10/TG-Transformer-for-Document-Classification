@@ -30,6 +30,7 @@ model:
   use_wl_enc: true            # E1
   readout: mean               # E4: mean | target
   freeze_embeddings: false    # E5
+  attn_bias: none             # N1: none | intimacy | edge (graph bias inside attention)
   # --- architecture ---
   hidden_size: 32
   num_layers: 2

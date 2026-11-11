@@ -56,23 +56,29 @@ def build_optimizer(model: TGTransformer, lr: float, weight_decay: float,
     The embedding table gets ``embedding_weight_decay`` (0 in the baseline): with
     L2 decay, rows that never receive a gradient (test/validation documents) would
     otherwise be shrunk towards zero by Adam's normalised updates.
+    The N1 attention-bias scales ``attn_beta`` get no weight decay, so they are not
+    pulled towards 0 (= towards the baseline) artificially.
     """
-    emb = [p for n, p in model.named_parameters() if n.startswith("node_emb.") and p.requires_grad]
-    rest = [p for n, p in model.named_parameters() if not n.startswith("node_emb.") and p.requires_grad]
+    named = [(n, p) for n, p in model.named_parameters() if p.requires_grad]
+    emb = [p for n, p in named if n.startswith("node_emb.")]
+    beta = [p for n, p in named if n == "attn_beta"]
+    rest = [p for n, p in named if not n.startswith("node_emb.") and n != "attn_beta"]
     groups = [{"params": rest, "weight_decay": weight_decay}]
     if emb:
         groups.append({"params": emb, "weight_decay": embedding_weight_decay})
+    if beta:
+        groups.append({"params": beta, "weight_decay": 0.0})
     return torch.optim.Adam(groups, lr=lr)
 
 
 @torch.no_grad()
-def evaluate(model, node_ids, mask, labels, idx, batch_size: int):
+def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None):
     """Mean cross-entropy loss, accuracy, macro-F1 and predictions on documents ``idx``."""
     model.eval()
     losses, preds = [], []
     for s in range(0, len(idx), batch_size):
         b = idx[s:s + batch_size]
-        logits = model(node_ids[b], mask[b])
+        logits = model(node_ids[b], mask[b], None if bias is None else bias[b])
         losses.append(F.cross_entropy(logits, labels[b], reduction="sum").item())
         preds.append(logits.argmax(1))
     preds = torch.cat(preds).numpy()
@@ -81,7 +87,8 @@ def evaluate(model, node_ids, mask, labels, idx, batch_size: int):
             "macro_f1": f1_score(y, preds, average="macro"), "preds": preds}
 
 
-def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
+def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
+                 attn_bias=None, return_model: bool = False):
     """Train one model on one dataset with one seed and evaluate on the test set.
 
     Args:
@@ -90,6 +97,9 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
             freeze_embeddings, hidden_size, ...).
         tcfg: training config (lr, weight_decay, batch_size, max_epochs, patience, ...).
         seed: random seed.
+        attn_bias: for N1, a dict from ``attn_bias.get_attn_bias`` with ``B``
+            (n_docs, k+1, k+1) and the ``node_ids`` it was built for; None otherwise.
+        return_model: also return the model with the best checkpoint loaded.
 
     Returns:
         result: dict with test accuracy / macro-F1, best epoch, timings.
@@ -109,6 +119,14 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
 
     ids_np, mask_np, _ = build_slices(data, mcfg["sampler"], mcfg["k"], seed)
     node_ids, mask = torch.as_tensor(ids_np), torch.as_tensor(mask_np)
+    bias_mode = mcfg.get("attn_bias", "none")
+    if (bias_mode != "none") != (attn_bias is not None):
+        raise ValueError("attn_bias data must be given exactly when mcfg['attn_bias'] != 'none'")
+    bias = None
+    if attn_bias is not None:
+        if not np.array_equal(attn_bias["node_ids"], ids_np):
+            raise ValueError("attention bias B was built for different slices")
+        bias = torch.as_tensor(attn_bias["B"])
 
     model = TGTransformer(
         data.X, data.node_types, data.wl_codes, data.num_classes,
@@ -117,7 +135,7 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
         dropout=mcfg["dropout"], attn_dropout=mcfg["attn_dropout"],
         use_type_enc=mcfg["use_type_enc"], use_wl_enc=mcfg["use_wl_enc"],
         readout=mcfg["readout"], freeze_embeddings=mcfg["freeze_embeddings"],
-        graph_residual=mcfg["graph_residual"])
+        graph_residual=mcfg["graph_residual"], attn_bias=bias_mode)
     opt = build_optimizer(model, tcfg["lr"], tcfg["weight_decay"],
                           tcfg["embedding_weight_decay"])
     gen = torch.Generator().manual_seed(seed)
@@ -135,14 +153,14 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
         tot, n = 0.0, 0
         for s in range(0, len(perm), bs):
             b = perm[s:s + bs]
-            logits = model(node_ids[b], mask[b])
+            logits = model(node_ids[b], mask[b], None if bias is None else bias[b])
             loss = F.cross_entropy(logits, y_visible[b])        # paper Eq. 9
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             tot += loss.item() * len(b)
             n += len(b)
-        val = evaluate(model, node_ids, mask, y_visible, va_idx, bs)
+        val = evaluate(model, node_ids, mask, y_visible, va_idx, bs, bias)
         dt = time.perf_counter() - t0
         epoch_times.append(dt)
         curves.append({"epoch": epoch, "train_loss": tot / n, "val_loss": val["loss"],
@@ -163,7 +181,7 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
 
     # ---- final test evaluation with the best-validation checkpoint ----------
     model.load_state_dict(best["state"])
-    test = evaluate(model, node_ids, mask, torch.as_tensor(data.labels), test_idx, bs)
+    test = evaluate(model, node_ids, mask, torch.as_tensor(data.labels), test_idx, bs, bias)
     result = {
         "dataset": data.name, "seed": seed,
         "test_acc": test["acc"], "test_macro_f1": test["macro_f1"],
@@ -174,4 +192,8 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1):
         "n_padded_positions": int((~mask_np).sum()),
         "n_trainable_params": int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
     }
+    if bias is not None:
+        result["attn_beta"] = best["state"]["attn_beta"].tolist()   # (num_layers, num_heads)
+    if return_model:
+        return result, curves, model
     return result, curves
