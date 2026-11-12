@@ -197,7 +197,7 @@ class TGTransformer(nn.Module):
 
     def forward(self, node_ids: torch.Tensor, mask: torch.Tensor,
                 bias: torch.Tensor | None = None,
-                wl_ids: torch.Tensor | None = None) -> torch.Tensor:
+                wl_ids: torch.Tensor | None = None, return_hidden: bool = False):
         """Compute class logits.
 
         Args:
@@ -206,9 +206,14 @@ class TGTransformer(nn.Module):
             bias: (B, k+1, k+1) graph-score matrix B (N1); required iff attn_bias != none.
             wl_ids: (B, k+1) slice-level WL codes (W1), padding = num_subgraph_codes;
                 required iff wl_scope == subgraph and the WL encoding is on.
+            return_hidden: analysis only (E6 over-smoothing); also return the node
+                states. Does not change the computation.
 
         Returns:
             (B, num_classes) logits (softmax of paper Eq. 8 is folded into the loss).
+            With ``return_hidden``: ``(logits, hidden)`` where ``hidden`` has ``input``
+            (H(0) after projection), ``layers`` (list of per-layer outputs, after G-Res)
+            and ``last_pre_res`` (last encoder-layer output before the G-Res term).
         """
         x = self.node_emb(node_ids)                         # raw features X[node]
         h0 = x
@@ -225,16 +230,22 @@ class TGTransformer(nn.Module):
         res = self.res_proj(x) if self.graph_residual else None
         if self.use_attn_bias != (bias is not None):
             raise ValueError("bias must be given exactly when attn_bias != 'none'")
+        hidden = {"input": h, "layers": [], "last_pre_res": None} if return_hidden else None
         for li, layer in enumerate(self.layers):
             lb = None
             if bias is not None:                            # N1: beta[l, h] * B
                 lb = self.attn_beta[li][None, :, None, None] * bias[:, None].to(h.dtype)
             h = layer(h, mask, lb)                          # paper Eqs. 6-7
+            if hidden is not None:
+                hidden["last_pre_res"] = h
             if res is not None:
                 h = h + res                                 # G-Res term of Eq. 7
+            if hidden is not None:
+                hidden["layers"].append(h)
         if self.readout == "mean":                          # paper Eq. 8: average(H(D))
             m = mask.unsqueeze(-1).to(h.dtype)
             z = (h * m).sum(1) / m.sum(1).clamp_min(1.0)
         else:
             z = h[:, 0]
-        return self.classifier(z)
+        logits = self.classifier(z)
+        return (logits, hidden) if return_hidden else logits

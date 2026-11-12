@@ -88,9 +88,42 @@ def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None, wl_
             "macro_f1": f1_score(y, preds, average="macro"), "preds": preds}
 
 
+@torch.no_grad()
+def slice_cosine_similarity(model, node_ids, mask, idx, batch_size: int, bias=None,
+                            wl_ids=None) -> dict:
+    """E6 over-smoothing: mean pairwise cosine similarity of the node vectors in a slice.
+
+    For every document in ``idx``, the cosine similarity of all pairs (i < j) of real
+    (unpadded) nodes in its slice is averaged; the result is the mean over documents.
+    Reported for the projected input H(0), for each layer's output (after G-Res, i.e.
+    what the readout sees after the last layer), and for the last encoder layer before
+    the G-Res term is added. Eval mode; draws no random numbers.
+    """
+    model.eval()
+    sums = None
+    for s in range(0, len(idx), batch_size):
+        b = idx[s:s + batch_size]
+        m = mask[b]
+        _, hid = model(node_ids[b], m, None if bias is None else bias[b],
+                       None if wl_ids is None else wl_ids[b], return_hidden=True)
+        states = {"input": hid["input"], "last_pre_res": hid["last_pre_res"],
+                  **{f"layer_{i + 1}": h for i, h in enumerate(hid["layers"])}}
+        mf = m.to(hid["input"].dtype)
+        pair = mf[:, :, None] * mf[:, None, :]
+        pair = pair * (1 - torch.eye(m.shape[1], dtype=pair.dtype))[None]
+        n_pairs = pair.sum((1, 2)).clamp_min(1.0)
+        if sums is None:
+            sums = {k: 0.0 for k in states}
+        for k, h in states.items():
+            hn = F.normalize(h, dim=-1)
+            sim = ((hn @ hn.transpose(1, 2)) * pair).sum((1, 2)) / n_pairs
+            sums[k] += sim.sum().item()
+    return {k: v / len(idx) for k, v in sums.items()}
+
+
 def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
                  attn_bias=None, return_model: bool = False, wl_sub=None,
-                 log_train_acc: bool = False):
+                 log_train_acc: bool = False, measure_oversmoothing: bool = False):
     """Train one model on one dataset with one seed and evaluate on the test set.
 
     Args:
@@ -107,6 +140,9 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         log_train_acc: after every epoch, also record the eval-mode (dropout off)
             accuracy on the training subset with the fixed slices. Draws no random
             numbers and is excluded from the epoch and total training times.
+        measure_oversmoothing: E6; after the test evaluation, add the mean pairwise
+            cosine similarity of the node vectors in each test slice
+            (``slice_cosine_similarity``) to the result as ``oversmoothing_test``.
 
     R-all options: ``tcfg['label_smoothing']`` (training loss only; validation, early
     stopping and test use plain cross-entropy) and ``mcfg['helper_resample']``
@@ -240,7 +276,12 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         "n_train": int(len(tr_idx)), "n_val": int(len(va_idx)), "n_test": int(len(test_idx)),
         "n_padded_positions": int((~mask_np).sum()),
         "n_trainable_params": int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
+        "n_trainable_params_no_emb": int(sum(p.numel() for n, p in model.named_parameters()
+                                             if p.requires_grad and not n.startswith("node_emb."))),
     }
+    if measure_oversmoothing:
+        result["oversmoothing_test"] = slice_cosine_similarity(
+            model, node_ids, mask, test_idx, bs, bias, wl_ids)
     if log_train_acc:
         result["train_acc_at_best"] = best["train_acc"]
         result["val_acc_at_best"] = best["val_acc"]

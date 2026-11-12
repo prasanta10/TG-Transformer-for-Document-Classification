@@ -168,5 +168,53 @@
     "complete": true,
     "wall_time_s": 744.0,
     "log": "logs/experiments/R_all_r_all.log"
+  },
+  "e6/depth2": {
+    "flags": [
+      "--num_layers",
+      "2",
+      "--log_train_acc",
+      "--oversmoothing"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 506.2,
+    "log": "logs/experiments/e6_depth2.log"
+  },
+  "e6/depth3": {
+    "flags": [
+      "--num_layers",
+      "3",
+      "--log_train_acc",
+      "--oversmoothing"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 606.7,
+    "log": "logs/experiments/e6_depth3.log"
+  },
+  "e6/depth4": {
+    "flags": [
+      "--num_layers",
+      "4",
+      "--log_train_acc",
+      "--oversmoothing"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 633.2,
+    "log": "logs/experiments/e6_depth4.log"
+  },
+  "e6/depth5": {
+    "flags": [
+      "--num_layers",
+      "5",
+      "--log_train_acc",
+      "--oversmoothing"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 693.9,
+    "log": "logs/experiments/e6_depth5.log"
   }
 }

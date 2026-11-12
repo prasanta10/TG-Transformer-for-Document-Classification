@@ -51,6 +51,11 @@ python summarize_w1.py
 python run_experiments.py --only R_all
 python plot_r_all.py
 python summarize_r_all.py
+
+# Depth: 2-5 Graph Transformer layers (E6), with over-smoothing check; summary and plots
+python run_experiments.py --only e6
+python summarize_e6.py
+python plot_e6.py
 ```
 
 Preprocessing runs once per dataset and is cached in `data/processed/`. It takes
@@ -72,11 +77,13 @@ Each switch can be set in the config file or on the command line. Use
 | E5: freeze the input embeddings | `--freeze_embeddings` | `on` / `off` |
 | N1: graph bias inside attention | `--attn_bias` | `none` / `intimacy` / `edge` |
 | W1: where WL codes are computed | `--wl_scope` | `full` / `subgraph` |
+| E6: number of Graph Transformer layers | `--num_layers` | integer ≥ 1 (baseline 2) |
 
 R-all uses its own config file, `configs/r_all.yaml`, rather than a single flag. It
 adds two config options: `label_smoothing` (training loss only) and `helper_resample`
 (redraw training helpers every epoch). `--log_train_acc` also records training
-accuracy after each epoch without changing the run.
+accuracy after each epoch without changing the run. `--oversmoothing` records how
+similar the node vectors of each test slice are after training (E6).
 
 ```bash
 python run.py --config configs/baseline.yaml --experiment e2_tfidf --sampler tfidf
@@ -243,6 +250,25 @@ R8), because the frozen embeddings no longer need gradients. Since the four reme
 were switched on together, these runs can't say which one matters most. Full tables
 and loss curves are in [`results/experiments/R_all/summary.md`](results/experiments/R_all/summary.md).
 
+### Depth (E6)
+
+E6 stacks 3, 4 or 5 Graph Transformer layers instead of 2, with everything else at
+the baseline.
+
+| Layers | R8 accuracy | Ohsumed accuracy | s / epoch (R8) |
+|---|---|---|---|
+| 2 (baseline) | 95.08 ± 0.29 | 53.79 ± 1.18 | 3.4 |
+| 3 | 94.80 ± 0.32 | 53.22 ± 1.04 | 3.9 |
+| 4 | 95.24 ± 0.30 | 53.36 ± 0.37 | 4.5 |
+| 5 | 94.78 ± 0.68 | 53.67 ± 0.65 | 5.1 |
+
+Depth changes nothing: no difference in accuracy or macro-F1 is significant, training
+accuracy at the best epoch stays the same, and deeper models overfit just as fast.
+Node vectors in a slice grow somewhat more alike with depth (mean cosine similarity
+0.66 → 0.73 on R8, 0.45 → 0.58 on Ohsumed), but they don't collapse; the graph
+residual keeps them apart. Five layers cost about 1.5× the time per epoch. Full
+tables and plots are in [`results/experiments/e6/summary.md`](results/experiments/e6/summary.md).
+
 ## Code layout
 
 ```
@@ -253,7 +279,7 @@ sampling.py              intimacy / tfidf / random samplers, R-all helper resamp
 model.py                 the TG-Transformer
 train.py                 training loop, early stopping, evaluation
 run.py                   command-line entry point
-run_experiments.py       runs ablations E1-E5, N1, W1 and R-all
+run_experiments.py       runs ablations E1-E6, N1, W1 and R-all
 attn_bias.py             builds the N1 attention-bias matrices B
 summarize_experiments.py summary tables, significance tests, plots
 time_samplers.py         preprocessing cost of each sampler (E2)
@@ -263,6 +289,8 @@ wl_subgraph.py           W1: WL codes computed inside each slice
 summarize_w1.py          W1 summary: tables, significance tests, WL statistics
 summarize_r_all.py       R-all summary: baseline vs R-all, train/val accuracy at best epoch
 plot_r_all.py            R-all loss curves (seed 0), baseline and R-all side by side
+summarize_e6.py          E6 summary: depth tables, significance tests, over-smoothing
+plot_e6.py               E6 plots: accuracy vs depth, loss curves for 2 and 5 layers
 configs/baseline.yaml    baseline settings
 configs/r_all.yaml       R-all settings (baseline + four remedies)
 ```

@@ -1,0 +1,70 @@
+{
+  "dataset": "R8",
+  "seed": 2,
+  "test_acc": 0.9520328917313842,
+  "test_macro_f1": 0.8728559308083186,
+  "best_epoch": 6,
+  "epochs_run": 16,
+  "best_val_loss": 0.15059714508752753,
+  "best_val_acc": 0.9507299270072993,
+  "mean_epoch_time_s": 4.709901312498914,
+  "total_train_time_s": 75.3997980899876,
+  "n_train": 4937,
+  "n_val": 548,
+  "n_test": 2189,
+  "n_padded_positions": 0,
+  "n_trainable_params": 4654948,
+  "n_trainable_params_no_emb": 46048,
+  "oversmoothing_test": {
+    "input": 0.473751014963902,
+    "last_pre_res": 0.830962742665632,
+    "layer_1": 0.5867077418798288,
+    "layer_2": 0.5766501099946784,
+    "layer_3": 0.6224381005508054,
+    "layer_4": 0.7185691027077108
+  },
+  "train_acc_at_best": 0.9981770305853758,
+  "val_acc_at_best": 0.9507299270072993,
+  "config": {
+    "model": {
+      "k": 23,
+      "sampler": "intimacy",
+      "use_type_enc": true,
+      "use_wl_enc": true,
+      "readout": "mean",
+      "freeze_embeddings": false,
+      "attn_bias": "none",
+      "wl_scope": "full",
+      "helper_resample": false,
+      "hidden_size": 32,
+      "num_layers": 4,
+      "num_heads": 4,
+      "intermediate_size": 32,
+      "dropout": 0.5,
+      "attn_dropout": 0.5,
+      "graph_residual": true
+    },
+    "train": {
+      "lr": 0.001,
+      "weight_decay": 0.0005,
+      "embedding_weight_decay": 0.0,
+      "label_smoothing": 0.0,
+      "batch_size": 64,
+      "max_epochs": 200,
+      "patience": 10,
+      "val_frac": 0.1,
+      "deterministic": true,
+      "num_threads": 0
+    },
+    "preprocess": {
+      "emb_dim": 300,
+      "oov_seed": 0,
+      "oov_range": 0.1,
+      "window_size": 20,
+      "alpha": 0.15,
+      "top_helpers": 50,
+      "wl_max_iter": 10,
+      "s_block_size": 2048
+    }
+  }
+}
