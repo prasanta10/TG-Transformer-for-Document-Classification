@@ -63,6 +63,8 @@ def parse_args(argv=None):
     p.add_argument("--preprocess_only", action="store_true")
     p.add_argument("--force_preprocess", action="store_true")
     p.add_argument("--no_save", action="store_true", help="do not write result files")
+    p.add_argument("--log_train_acc", action="store_true",
+                   help="also log eval-mode training accuracy each epoch (not timed)")
     return p.parse_args(argv)
 
 
@@ -162,7 +164,7 @@ def main(argv=None):
             if cfg["model"].get("wl_scope", "full") == "subgraph":
                 wl_sub = get_wl_subgraph(data, cfg, seed)
             res, curves = run_training(data, cfg["model"], cfg["train"], seed, attn_bias=bias,
-                                       wl_sub=wl_sub)
+                                       wl_sub=wl_sub, log_train_acc=args.log_train_acc)
             if bias is not None:
                 res["attn_bias_build"] = bias["info"]
             if wl_sub is not None:
@@ -178,8 +180,10 @@ def main(argv=None):
             with open(os.path.join(ds_dir, f"seed_{seed}.json"), "w") as f:
                 json.dump(res, f, indent=2)
             with open(os.path.join(ds_dir, f"curves_seed_{seed}.csv"), "w", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=["epoch", "train_loss", "val_loss", "val_acc",
-                                                  "epoch_time_s"])
+                fields = ["epoch", "train_loss", "val_loss", "val_acc", "epoch_time_s"]
+                if args.log_train_acc:
+                    fields += ["train_loss_plain", "train_acc"]
+                w = csv.DictWriter(f, fieldnames=fields)
                 w.writeheader()
                 w.writerows(curves)
     if all_results and not args.no_save:

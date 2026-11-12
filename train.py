@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score
 
 from model import TGTransformer
-from sampling import build_slices
+from sampling import build_slices, resample_intimacy_helpers
 
 
 def set_seed(seed: int, deterministic: bool = True):
@@ -89,7 +89,8 @@ def evaluate(model, node_ids, mask, labels, idx, batch_size: int, bias=None, wl_
 
 
 def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
-                 attn_bias=None, return_model: bool = False, wl_sub=None):
+                 attn_bias=None, return_model: bool = False, wl_sub=None,
+                 log_train_acc: bool = False):
     """Train one model on one dataset with one seed and evaluate on the test set.
 
     Args:
@@ -103,6 +104,13 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         return_model: also return the model with the best checkpoint loaded.
         wl_sub: for W1, a dict from ``wl_subgraph.get_wl_subgraph`` with ``codes``
             (n_docs, k+1; -1 = padding) and the ``node_ids`` they were built for.
+        log_train_acc: after every epoch, also record the eval-mode (dropout off)
+            accuracy on the training subset with the fixed slices. Draws no random
+            numbers and is excluded from the epoch and total training times.
+
+    R-all options: ``tcfg['label_smoothing']`` (training loss only; validation, early
+    stopping and test use plain cross-entropy) and ``mcfg['helper_resample']``
+    (training slices redrawn each epoch; validation and test use the fixed slices).
 
     Returns:
         result: dict with test accuracy / macro-F1, best epoch, timings.
@@ -142,6 +150,12 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         if mcfg["use_wl_enc"]:
             wl_ids = torch.as_tensor(np.where(codes < 0, n_sub_codes, codes))
 
+    resample = bool(mcfg.get("helper_resample", False))
+    if resample and (mcfg["sampler"] != "intimacy" or bias is not None or wl_sub is not None):
+        raise ValueError("helper_resample needs the intimacy sampler and cannot be combined "
+                         "with attn_bias or wl_scope=subgraph (both are built for fixed slices)")
+    smoothing = float(tcfg.get("label_smoothing", 0.0))
+
     model = TGTransformer(
         data.X, data.node_types, data.wl_codes, data.num_classes,
         hidden_size=mcfg["hidden_size"], num_layers=mcfg["num_layers"],
@@ -160,30 +174,49 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
     best = {"val_loss": float("inf"), "epoch": 0, "state": None}
     curves, epoch_times = [], []
     bad_epochs = 0
+    t_extra = 0.0                                   # train-accuracy logging, not timed
     t_start = time.perf_counter()
     for epoch in range(1, tcfg["max_epochs"] + 1):
         t0 = time.perf_counter()
+        train_ids = node_ids
+        if resample:                                # training slices only
+            train_ids = torch.as_tensor(resample_intimacy_helpers(
+                ids_np, data.helpers, data.helper_scores, tr_idx, mcfg["k"], seed, epoch))
         model.train()
         perm = tr_t[torch.randperm(len(tr_t), generator=gen)]
-        tot, n = 0.0, 0
+        tot, tot_plain, n = 0.0, 0.0, 0
         for s in range(0, len(perm), bs):
             b = perm[s:s + bs]
-            logits = model(node_ids[b], mask[b], None if bias is None else bias[b],
+            logits = model(train_ids[b], mask[b], None if bias is None else bias[b],
                            None if wl_ids is None else wl_ids[b])
-            loss = F.cross_entropy(logits, y_visible[b])        # paper Eq. 9
+            if smoothing:
+                loss = F.cross_entropy(logits, y_visible[b], label_smoothing=smoothing)
+                plain = F.cross_entropy(logits.detach(), y_visible[b]).item()
+            else:
+                loss = F.cross_entropy(logits, y_visible[b])    # paper Eq. 9
+                plain = None
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             tot += loss.item() * len(b)
+            tot_plain += (loss.item() if plain is None else plain) * len(b)
             n += len(b)
         val = evaluate(model, node_ids, mask, y_visible, va_idx, bs, bias, wl_ids)
         dt = time.perf_counter() - t0
         epoch_times.append(dt)
-        curves.append({"epoch": epoch, "train_loss": tot / n, "val_loss": val["loss"],
-                       "val_acc": val["acc"], "epoch_time_s": dt})
+        row = {"epoch": epoch, "train_loss": tot / n, "val_loss": val["loss"],
+               "val_acc": val["acc"], "epoch_time_s": dt}
+        if log_train_acc:
+            t1 = time.perf_counter()
+            row["train_loss_plain"] = tot_plain / n
+            row["train_acc"] = evaluate(model, node_ids, mask, y_visible, tr_idx, bs,
+                                        bias, wl_ids)["acc"]
+            t_extra += time.perf_counter() - t1
+        curves.append(row)
         improved = val["loss"] < best["val_loss"]
         if improved:
             best = {"val_loss": val["loss"], "val_acc": val["acc"], "epoch": epoch,
+                    "train_acc": row.get("train_acc"),
                     "state": copy.deepcopy(model.state_dict())}
             bad_epochs = 0
         else:
@@ -193,7 +226,7 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
                   f"val_acc {val['acc']:.4f}  {dt:.2f}s{'  *' if improved else ''}", flush=True)
         if bad_epochs >= tcfg["patience"]:
             break
-    total_time = time.perf_counter() - t_start
+    total_time = time.perf_counter() - t_start - t_extra
 
     # ---- final test evaluation with the best-validation checkpoint ----------
     model.load_state_dict(best["state"])
@@ -208,6 +241,9 @@ def run_training(data, mcfg: dict, tcfg: dict, seed: int, log_every: int = 1,
         "n_padded_positions": int((~mask_np).sum()),
         "n_trainable_params": int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
     }
+    if log_train_acc:
+        result["train_acc_at_best"] = best["train_acc"]
+        result["val_acc_at_best"] = best["val_acc"]
     if bias is not None:
         result["attn_beta"] = best["state"]["attn_beta"].tolist()   # (num_layers, num_heads)
     if return_model:

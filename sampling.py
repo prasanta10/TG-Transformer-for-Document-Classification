@@ -80,3 +80,35 @@ def build_slices(data, sampler: str, k: int, seed: int = 0):
     node_ids = np.concatenate([np.arange(data.n_docs, dtype=np.int64)[:, None], h], axis=1)
     mask = node_ids != pad_id
     return node_ids, mask, pad_id
+
+
+def resample_intimacy_helpers(node_ids: np.ndarray, helpers_top: np.ndarray,
+                              helper_scores: np.ndarray, rows: np.ndarray, k: int,
+                              seed: int, epoch: int) -> np.ndarray:
+    """Redraw the helpers of the documents in ``rows`` (R-all ``helper_resample``).
+
+    For each document in ``rows``, k distinct helpers are drawn without replacement
+    from its cached top-50 intimacy list, with probability proportional to intimacy.
+    The draw uses the Gumbel-top-k trick (the k largest log(score) + Gumbel noise),
+    which has exactly the distribution of drawing one helper at a time without
+    replacement. Random numbers come from ``default_rng([seed, epoch])``, separate
+    from torch's generators. Drawn helpers are stored in descending intimacy order.
+    All other rows (validation / test documents) are returned unchanged.
+
+    Args:
+        node_ids: (n_docs, k+1) fixed slices; column 0 is the document.
+        helpers_top / helper_scores: (n_docs, 50) cached helper ids and intimacy scores.
+        rows: document indices to resample (the training documents).
+
+    Returns:
+        (n_docs, k+1) int64 copy of ``node_ids`` with the given rows resampled.
+    """
+    if np.any(helper_scores[rows] <= 0):
+        raise ValueError("intimacy scores must be positive for proportional sampling")
+    rng = np.random.default_rng([seed, epoch])
+    keys = np.log(helper_scores[rows].astype(np.float64)) + rng.gumbel(size=(len(rows), helpers_top.shape[1]))
+    pick = np.argpartition(-keys, k - 1, axis=1)[:, :k]
+    pick.sort(axis=1)                       # cached lists are in descending intimacy order
+    out = node_ids.copy()
+    out[rows, 1:] = np.take_along_axis(helpers_top[rows], pick, axis=1)
+    return out

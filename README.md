@@ -45,6 +45,12 @@ python summarize_n1.py
 # WL computed inside each slice (W1) and its summary
 python run_experiments.py --only W1
 python summarize_w1.py
+
+# Four anti-overfitting remedies at once (R-all), plus a baseline replay that logs
+# training accuracy; then the loss-curve plots and the summary
+python run_experiments.py --only R_all
+python plot_r_all.py
+python summarize_r_all.py
 ```
 
 Preprocessing runs once per dataset and is cached in `data/processed/`. It takes
@@ -66,6 +72,11 @@ Each switch can be set in the config file or on the command line. Use
 | E5: freeze the input embeddings | `--freeze_embeddings` | `on` / `off` |
 | N1: graph bias inside attention | `--attn_bias` | `none` / `intimacy` / `edge` |
 | W1: where WL codes are computed | `--wl_scope` | `full` / `subgraph` |
+
+R-all uses its own config file, `configs/r_all.yaml`, rather than a single flag. It
+adds two config options: `label_smoothing` (training loss only) and `helper_resample`
+(redraw training helpers every epoch). `--log_train_acc` also records training
+accuracy after each epoch without changing the run.
 
 ```bash
 python run.py --config configs/baseline.yaml --experiment e2_tfidf --sampler tfidf
@@ -202,17 +213,47 @@ full-graph WL (−2.3 points, p = 0.010) but better than no WL at all (+1.4 poin
 p = 0.036; macro-F1 +3.4, p = 0.002). Computing the codes takes about 8 s on R8 and
 11 s on Ohsumed.
 
+### Fighting overfitting (R-all)
+
+The baseline overfits fast. At its best epoch it already gets 99.6% of R8's
+training documents right (88.9% on Ohsumed), and validation loss starts rising
+around epoch 5. R-all switches on four standard remedies at once, with values fixed
+in advance and not tuned:
+
+- weight decay 5e-3 instead of 5e-4;
+- label smoothing 0.1 on the training loss;
+- a fresh set of 23 helper words for each training document every epoch, drawn
+  from its top 50 in proportion to intimacy (validation and test keep the fixed
+  top 23);
+- frozen input embeddings.
+
+| Dataset | Baseline | R-all | Paper |
+|---|---|---|---|
+| R8 | 95.08 ± 0.29 | 94.96 ± 0.68 | 98.1 |
+| Ohsumed | 53.79 ± 1.18 | **61.62 ± 0.37** | 70.4 |
+
+On Ohsumed this is the biggest gain in the project: +7.8 points accuracy and +14.4
+macro-F1 (both p < 0.001), with much less spread across seeds. It closes almost half
+the gap to the paper. On R8 nothing changes (−0.1, p = 0.69).
+
+The overfitting itself is clearly reduced. Training accuracy at the best epoch drops
+to 96.5% on R8 and 79.3% on Ohsumed. Validation loss keeps improving until about
+epoch 36–39 instead of epoch 6. Each epoch is also faster (1.6 s instead of 3.7 s on
+R8), because the frozen embeddings no longer need gradients. Since the four remedies
+were switched on together, these runs can't say which one matters most. Full tables
+and loss curves are in [`results/experiments/R_all/summary.md`](results/experiments/R_all/summary.md).
+
 ## Code layout
 
 ```
 data.py                  corpus loading, GloVe features, preprocessing and cache
 graph.py                 TF-IDF/PMI graph, intimacy scores, helper selection
 wl.py                    Weisfeiler-Lehman codes (full graph, and batched per slice)
-sampling.py              intimacy / tfidf / random samplers
+sampling.py              intimacy / tfidf / random samplers, R-all helper resampling
 model.py                 the TG-Transformer
 train.py                 training loop, early stopping, evaluation
 run.py                   command-line entry point
-run_experiments.py       runs ablations E1-E5, N1 and W1
+run_experiments.py       runs ablations E1-E5, N1, W1 and R-all
 attn_bias.py             builds the N1 attention-bias matrices B
 summarize_experiments.py summary tables, significance tests, plots
 time_samplers.py         preprocessing cost of each sampler (E2)
@@ -220,5 +261,8 @@ summarize_n1.py          N1 summary: tables, significance tests, learned beta, c
 n1_attention.py          N1 check: attention to helpers by intimacy rank
 wl_subgraph.py           W1: WL codes computed inside each slice
 summarize_w1.py          W1 summary: tables, significance tests, WL statistics
+summarize_r_all.py       R-all summary: baseline vs R-all, train/val accuracy at best epoch
+plot_r_all.py            R-all loss curves (seed 0), baseline and R-all side by side
 configs/baseline.yaml    baseline settings
+configs/r_all.yaml       R-all settings (baseline + four remedies)
 ```

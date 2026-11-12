@@ -1,0 +1,55 @@
+# R-all: the baseline plus four fixed anti-overfitting remedies (no tuning).
+# Every model/train key can be overridden from the command line, e.g.
+#   python run.py --config configs/baseline.yaml --k 10 --sampler tfidf --experiment e2_tfidf
+
+experiment: experiments/R_all  # results go to <results_dir>/<experiment>/
+datasets: [R8, Ohsumed]
+seeds: [0, 1, 2, 3, 4]
+
+paths:
+  textgcn_dir: data/raw/textgcn
+  glove: data/raw/glove/glove.6B.300d.txt
+  processed_dir: data/processed
+  results_dir: results
+
+preprocess:
+  emb_dim: 300
+  oov_seed: 0
+  oov_range: 0.1              # OOV words ~ uniform(-0.1, 0.1)
+  window_size: 20             # PMI sliding window
+  alpha: 0.15                 # PageRank factor in paper Eq. 2
+  top_helpers: 50             # cached helper-list length (k <= 50)
+  wl_max_iter: 10
+  s_block_size: 2048          # columns of S solved at a time (memory knob only)
+
+model:
+  # --- experiment switches ---
+  k: 23                       # E3: number of helper words (<= 50)
+  sampler: intimacy           # E2: intimacy | tfidf | random
+  use_type_enc: true          # E1
+  use_wl_enc: true            # E1
+  readout: mean               # E4: mean | target
+  freeze_embeddings: true     # E5            (R-all; baseline false)
+  attn_bias: none             # N1: none | intimacy | edge (graph bias inside attention)
+  wl_scope: full              # W1: full | subgraph (WL on the full graph or inside each slice)
+  helper_resample: true       # R-all (baseline false): redraw training helpers from the top-50 each epoch
+  # --- architecture ---
+  hidden_size: 32
+  num_layers: 2
+  num_heads: 4
+  intermediate_size: 32       # Graph-BERT default FFN size
+  dropout: 0.5
+  attn_dropout: 0.5
+  graph_residual: true        # G-Res
+
+train:
+  lr: 0.001
+  weight_decay: 0.005         # R-all (baseline 0.0005); applied to all parameters except the embedding table
+  embedding_weight_decay: 0.0
+  label_smoothing: 0.1        # R-all (baseline 0.0): label smoothing of the training loss only
+  batch_size: 64
+  max_epochs: 200
+  patience: 10                # early stopping on validation loss
+  val_frac: 0.1
+  deterministic: true
+  num_threads: 0              # 0 = torch default

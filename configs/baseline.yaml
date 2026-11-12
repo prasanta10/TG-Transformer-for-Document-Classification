@@ -32,6 +32,7 @@ model:
   freeze_embeddings: false    # E5
   attn_bias: none             # N1: none | intimacy | edge (graph bias inside attention)
   wl_scope: full              # W1: full | subgraph (WL on the full graph or inside each slice)
+  helper_resample: false      # R-all: redraw training helpers from the top-50 each epoch
   # --- architecture ---
   hidden_size: 32
   num_layers: 2
@@ -45,6 +46,7 @@ train:
   lr: 0.001
   weight_decay: 0.0005        # applied to all parameters except the embedding table
   embedding_weight_decay: 0.0
+  label_smoothing: 0.0        # R-all: label smoothing of the training loss only
   batch_size: 64
   max_epochs: 200
   patience: 10                # early stopping on validation loss

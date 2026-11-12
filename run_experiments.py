@@ -1,4 +1,4 @@
-"""Run experiments E1-E5, N1 and W1.
+"""Run experiments E1-E5, N1, W1 and R-all.
 
 Each setting changes exactly one thing relative to the reference configuration
 (configs/baseline.yaml) and is run on R8 and Ohsumed with seeds 0-4 via run.py,
@@ -53,9 +53,18 @@ W1_SETTINGS = [
     ("W1", "wl_subgraph", ["--wl_scope", "subgraph"]),
 ]
 
+# R-all: four anti-overfitting remedies at once (configs/r_all.yaml), plus a replay of
+# the baseline with training-accuracy logging. Results: results/experiments/R_all/.
+R_ALL_SETTINGS = [
+    ("R_all", "baseline_replay", ["--config", "configs/baseline.yaml", "--log_train_acc"]),
+    ("R_all", "r_all", ["--config", "configs/r_all.yaml", "--log_train_acc"]),
+]
+
 
 def setting_dir(exp: str, setting: str) -> str:
     """Results directory of one setting, relative to results/."""
+    if (exp, setting) == ("R_all", "r_all"):
+        return os.path.join("experiments", "R_all")     # results/experiments/R_all/<dataset>/
     return os.path.join("experiments", exp, setting)
 
 
@@ -70,21 +79,24 @@ def main():
     """Run all (or selected) settings sequentially and write a run log."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default="configs/baseline.yaml")
-    ap.add_argument("--only", nargs="+", help="restrict to these experiments, e.g. e1 e3 N1 W1")
+    ap.add_argument("--only", nargs="+", help="restrict to these experiments, e.g. e1 e3 N1 W1 R_all")
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs", "experiments"), exist_ok=True)
     log_path = os.path.join(ROOT, "results", "experiments", "run_log.json")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     run_log = json.load(open(log_path)) if os.path.exists(log_path) else {}
 
-    for exp, setting, flags in SETTINGS + N1_SETTINGS + W1_SETTINGS:
+    for exp, setting, flags in SETTINGS + N1_SETTINGS + W1_SETTINGS + R_ALL_SETTINGS:
         if args.only and exp not in args.only:
             continue
         key = f"{exp}/{setting}"
         if is_complete(exp, setting):
             print(f"[skip] {key}: already complete", flush=True)
             continue
-        cmd = [sys.executable, "run.py", "--config", args.config,
+        config = flags[flags.index("--config") + 1] if "--config" in flags else args.config
+        flags = [f for i, f in enumerate(flags)
+                 if f != "--config" and (i == 0 or flags[i - 1] != "--config")]
+        cmd = [sys.executable, "run.py", "--config", config,
                "--experiment", setting_dir(exp, setting),
                "--datasets", *DATASETS, "--seeds", *map(str, SEEDS), *flags]
         log_file = os.path.join(ROOT, "logs", "experiments", f"{exp}_{setting}.log")

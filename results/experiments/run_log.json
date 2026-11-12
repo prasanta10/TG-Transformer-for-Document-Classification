@@ -150,5 +150,23 @@
     "complete": true,
     "wall_time_s": 462.7,
     "log": "logs/experiments/W1_wl_subgraph.log"
+  },
+  "R_all/baseline_replay": {
+    "flags": [
+      "--log_train_acc"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 516.5,
+    "log": "logs/experiments/R_all_baseline_replay.log"
+  },
+  "R_all/r_all": {
+    "flags": [
+      "--log_train_acc"
+    ],
+    "exit_code": 0,
+    "complete": true,
+    "wall_time_s": 744.0,
+    "log": "logs/experiments/R_all_r_all.log"
   }
 }
