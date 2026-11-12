@@ -55,6 +55,7 @@ def parse_args(argv=None):
                    help="N1: graph bias inside attention")
     p.add_argument("--wl_scope", choices=["full", "subgraph"],
                    help="W1: WL on the full graph or inside each slice")
+    p.add_argument("--num_layers", type=int, help="E6: number of Graph Transformer layers")
     # training overrides
     p.add_argument("--max_epochs", type=int)
     p.add_argument("--patience", type=int)
@@ -65,6 +66,9 @@ def parse_args(argv=None):
     p.add_argument("--no_save", action="store_true", help="do not write result files")
     p.add_argument("--log_train_acc", action="store_true",
                    help="also log eval-mode training accuracy each epoch (not timed)")
+    p.add_argument("--oversmoothing", action="store_true",
+                   help="E6: record the mean pairwise cosine similarity of node vectors "
+                        "in each test slice (after training, not timed)")
     return p.parse_args(argv)
 
 
@@ -76,12 +80,14 @@ def load_config(args) -> dict:
         if getattr(args, key) is not None:
             cfg[key] = getattr(args, key)
     for key in ("k", "sampler", "use_type_enc", "use_wl_enc", "readout", "freeze_embeddings",
-                "attn_bias", "wl_scope"):
+                "attn_bias", "wl_scope", "num_layers"):
         if getattr(args, key) is not None:
             cfg["model"][key] = getattr(args, key)
     for key in ("max_epochs", "patience", "num_threads"):
         if getattr(args, key) is not None:
             cfg["train"][key] = getattr(args, key)
+    if cfg["model"]["num_layers"] < 1:
+        raise ValueError("num_layers must be >= 1")
     if not 1 <= cfg["model"]["k"] <= cfg["preprocess"]["top_helpers"]:
         raise ValueError("k must be in [1, top_helpers]")
     cfg["datasets"] = [canonical_name(d) for d in cfg["datasets"]]
@@ -117,7 +123,8 @@ def write_summary(cfg: dict, all_results: dict, out_dir: str):
         f"Config: k={m['k']}, sampler={m['sampler']}, type_enc={m['use_type_enc']}, "
         f"wl_enc={m['use_wl_enc']}, readout={m['readout']}, "
         f"freeze_embeddings={m['freeze_embeddings']}, "
-        f"attn_bias={m.get('attn_bias', 'none')}, wl_scope={m.get('wl_scope', 'full')}; seeds={cfg['seeds']}.", "",
+        f"attn_bias={m.get('attn_bias', 'none')}, wl_scope={m.get('wl_scope', 'full')}, "
+        f"num_layers={m['num_layers']}; seeds={cfg['seeds']}.", "",
         "Mean ± sample std (ddof=1) over seeds, in %.", "",
         "| Dataset | Test accuracy | Test macro-F1 | Paper accuracy | Best epoch (mean) "
         "| Epochs run (mean) | Time/epoch (s) |",
@@ -164,7 +171,8 @@ def main(argv=None):
             if cfg["model"].get("wl_scope", "full") == "subgraph":
                 wl_sub = get_wl_subgraph(data, cfg, seed)
             res, curves = run_training(data, cfg["model"], cfg["train"], seed, attn_bias=bias,
-                                       wl_sub=wl_sub, log_train_acc=args.log_train_acc)
+                                       wl_sub=wl_sub, log_train_acc=args.log_train_acc,
+                                       measure_oversmoothing=args.oversmoothing)
             if bias is not None:
                 res["attn_bias_build"] = bias["info"]
             if wl_sub is not None:
